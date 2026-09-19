@@ -1,0 +1,41 @@
+name: malaabi
+description: "تطبيق إدارة وحجوزات الملاعب الرياضية"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+
+  # Local Storage & Utilities
+  shared_preferences: ^2.3.2
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+
+  # Location & Geolocation
+  geolocator: ^10.1.0
+
+  # Media & Images
+  image_picker: ^1.1.2
+
+dependency_overrides:
+  # تثبيت البلجن الأندرويدي على نسخة متوافقة مع Gradle 8 ولا تحتوي على كود flutter property المكسور
+  geolocator_android: 4.5.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
