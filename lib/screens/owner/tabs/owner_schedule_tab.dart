@@ -133,6 +133,59 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
     }
   }
 
+  /// شريط تنبيه خفيف بإلغاءات اللاعبين الحديثة (بدل النافذة المنبثقة المزعجة)
+  /// يختفي التنبيه بمجرد الضغط عليه ويعتبر "مُطّلع عليه"
+  Widget _buildCancellationBanners() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('bookings')
+          .where('pitchName', isEqualTo: widget.pitchName)
+          .where('cancelledByPlayer', isEqualTo: true)
+          .where('cancellationSeenByOwner', isEqualTo: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          children: docs.map((doc) {
+            final d = doc.data() as Map<String, dynamic>;
+            final teamName = d['cancellingTeamName'] ?? d['teamOne'] ?? 'فريق كابتن';
+            final date = d['date'] ?? '';
+            final time = d['startTime'] ?? '';
+
+            return InkWell(
+              onTap: () => doc.reference.update({'cancellationSeenByOwner': true}),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_busy_rounded, color: Colors.red.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'قام كابتن ($teamName) بإلغاء حجز يوم $date الساعة $time',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red.shade900),
+                      ),
+                    ),
+                    Icon(Icons.close_rounded, size: 16, color: Colors.red.shade400),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -143,6 +196,7 @@ class _OwnerScheduleTabState extends State<OwnerScheduleTab> {
       textDirection: ui.TextDirection.rtl,
       child: Column(
         children: [
+          _buildCancellationBanners(),
           TodayFinancialCard(pitchName: widget.pitchName),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10),

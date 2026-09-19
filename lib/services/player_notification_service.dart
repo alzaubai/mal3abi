@@ -5,32 +5,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PlayerNotificationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static StreamSubscription<QuerySnapshot>? _bookingsSub;
   static StreamSubscription<QuerySnapshot>? _tournamentsSub;
 
   /// بدء الاستماع الموحد
+  /// ملاحظة: تحديثات الحجوزات العادية (قبول/رفض) لا تحتاج نافذة منبثقة —
+  /// يكفيها الدائرة (Badge) وتلوين الكارت بتبويب "حجوزاتي" (يرجع طبيعي بالضغط عليه).
+  /// هذا الاستماع مخصص فقط لإشعارات البطولات (طرد/تحديد موعد) وقبول التحديات.
   static void listen(BuildContext context, String userPhone) {
     stop(); // إلغاء أي استماع سابق لتجنب التكرار
 
-    // 1. استماع لتحديثات الحجوزات العادية
-    _bookingsSub = _firestore
-        .collection('bookings')
-        .where('phone', isEqualTo: userPhone)
-        .where('seenByPlayer', isEqualTo: false)
-        .snapshots()
-        .listen((snapshot) {
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final status = data['status'];
-
-        if (status == 'confirmed' || status == 'rejected') {
-          if (!context.mounted) return;
-          _showBookingStatusDialog(context, doc.reference, data);
-        }
-      }
-    });
-
-    // 2. استماع لإشعارات البطولات
     _tournamentsSub = _firestore
         .collection('notifications')
         .where('userPhone', isEqualTo: userPhone)
@@ -47,100 +30,8 @@ class PlayerNotificationService {
 
   /// إيقاف الاستماع عند مغادرة الشاشة أو تسجيل الخروج
   static void stop() {
-    _bookingsSub?.cancel();
-    _bookingsSub = null;
     _tournamentsSub?.cancel();
     _tournamentsSub = null;
-  }
-
-  static void _showBookingStatusDialog(
-    BuildContext context,
-    DocumentReference docRef,
-    Map<String, dynamic> data,
-  ) {
-    final bool isAccepted = data['status'] == 'confirmed';
-    final pitchName = data['pitchName'] ?? 'الملعب';
-    final date = data['date'] ?? '';
-    final time = data['startTime'] ?? '';
-    final reason = data['rejectionReason'] ?? 'نعتذر عن استقبال الحجز في هذا التوقيت';
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: Row(
-            children: [
-              Icon(
-                isAccepted ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                color: isAccepted ? const Color(0xFF1B5E20) : Colors.red,
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isAccepted ? 'تم تثبيت حجزك بنجاح' : 'اعتذار عن قبول الحجز',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: isAccepted ? const Color(0xFF1B5E20) : Colors.red,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isAccepted
-                    ? 'وافقت إدارة $pitchName على طلب حجز موعدك رسمياً.'
-                    : 'اعتذرت إدارة $pitchName عن قبول الموعد للسبب الآتي:',
-                style: const TextStyle(fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isAccepted ? const Color(0xFFE8F5E9) : Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isAccepted ? const Color(0xFFA5D6A7) : Colors.red.shade200,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('التاريخ: $date', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('الوقت: $time', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    if (!isAccepted) ...[
-                      const SizedBox(height: 6),
-                      Text('السبب: $reason', style: TextStyle(fontSize: 12, color: Colors.red.shade900, fontWeight: FontWeight.w600)),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isAccepted ? const Color(0xFF1B5E20) : Colors.grey.shade800,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () async {
-                await docRef.update({'seenByPlayer': true});
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text('حسناً، فهمت', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   static void _showTournamentNotificationDialog(

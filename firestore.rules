@@ -1,0 +1,86 @@
+rules_version = '2';
+
+// قواعد أمان Firestore لتطبيق ملعبي (Malaabi)
+// ==============================================
+// المبدأ الأساسي: أي عملية قراءة أو كتابة تتطلب تسجيل دخول حقيقي بـ Firebase Auth
+// (تمنع أي وصول مباشر لقاعدة البيانات من خارج التطبيق بدون حساب مسجل).
+//
+// ملاحظة مهمة: بما إن التطبيق يعتمد رقم الهاتف كمعرّف أساسي (مو Firebase UID مباشرة)،
+// بعض العمليات (مثل تحديث matchesPlayed من طرف المالك، أو تحديث تقييم الملعب من مراجع آخر)
+// تحتاج صلاحية كتابة "بين المستخدمين" ضمن التطبيق، فهذه القواعد تحقق تسجيل الدخول كخط دفاع
+// أساسي، وليست قفلاً كاملاً على مستوى كل حقل. لتقييد أدق (كل مستخدم يعدل بياناته فقط بكل
+// الحالات)، الخطوة التالية المقترحة هي استخدام Custom Claims عبر Cloud Function تربط
+// Firebase UID برقم الهاتف وقت التسجيل مباشرة.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ---------- المستخدمون ----------
+    match /users/{phone} {
+      allow read: if isSignedIn();
+      // إنشاء وثيقة المستخدم مسموح فقط لصاحب الحساب نفسه (firebaseUid يطابق حساب Auth الحالي)
+      allow create: if isSignedIn() && request.resource.data.firebaseUid == request.auth.uid;
+      allow update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // ---------- الملاعب ----------
+    match /pitches/{pitchId} {
+      // تصفح الملاعب متاح للجميع حتى بدون تسجيل دخول (صفحة استكشاف عامة)
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+      }
+    }
+
+    // ---------- الحجوزات ----------
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    // ---------- الحجوزات الأسبوعية الدائمة ----------
+    match /recurring_rules/{ruleId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ---------- قفل الأوقات المؤقت (5 دقائق أثناء إتمام الحجز) ----------
+    match /slot_locks/{lockId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ---------- البطولات ----------
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // ---------- التحديات المفتوحة ----------
+    match /challenges/{challengeId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // ---------- تقييمات المباريات (سجل تاريخي، لا يُعدَّل بعد الإرسال) ----------
+    match /match_evaluations/{evalId} {
+      allow read, create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // ---------- الإشعارات ----------
+    match /notifications/{notifId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+  }
+}

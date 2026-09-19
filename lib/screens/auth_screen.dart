@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../constants.dart';
 import '../services/auth_service.dart';
 import 'player_screen.dart';
@@ -18,6 +19,11 @@ class _AuthScreenState extends State<AuthScreen> {
   bool isOwner = false;
   bool _obscurePassword = true;
   bool isLoading = false;
+  bool _isGoogleLoading = false;
+
+  // وضع "إكمال الملف الشخصي" بعد أول تسجيل دخول ناجح بـ Google (يحتاج رقم هاتف ودور)
+  bool _needsGoogleCompletion = false;
+  String? _pendingFirebaseUid;
 
   final phoneController = TextEditingController();
   final passwordController = TextEditingController();
@@ -39,6 +45,10 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _checkSession() async {
+    // نتحقق من جلسة Firebase Auth الحقيقية، مو بس من القيم المحفوظة محلياً،
+    // حتى لا يدخل التطبيق تلقائياً بعد انتهاء صلاحية الجلسة أو تسجيل الخروج من مكان آخر
+    if (FirebaseAuth.instance.currentUser == null) return;
+
     final prefs = await SharedPreferences.getInstance();
     final savedPhone = prefs.getString('phone');
     final savedRole = prefs.getString('role');
@@ -64,6 +74,44 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submit() async {
     final phone = phoneController.text.trim();
     final password = passwordController.text.trim();
+
+    // وضع إكمال الملف الشخصي بعد Google: ما نحتاج كلمة مرور، بس رقم الهاتف والدور
+    if (_needsGoogleCompletion) {
+      if (phone.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى إدخال رقم الهاتف')));
+        return;
+      }
+      if (isOwner && pitchNameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى كتابة اسم الملعب')));
+        return;
+      }
+
+      setState(() => isLoading = true);
+      final result = await AuthService.completeGoogleRegistration(
+        isOwner: isOwner,
+        phone: phone,
+        firebaseUid: _pendingFirebaseUid!,
+        name: nameController.text.trim(),
+        gov: _selectedGov,
+        area: _selectedArea,
+        teamName: teamNameController.text.trim(),
+        pitchName: pitchNameController.text.trim(),
+        hourlyRate: double.tryParse(hourlyRateController.text.trim()),
+        addressDetails: addressDetailsController.text.trim(),
+        pitchType: _selectedPitchType,
+        surfaceType: _selectedSurface,
+      );
+
+      if (mounted) {
+        setState(() => isLoading = false);
+        if (result.success) {
+          _navigateBasedOnRole(phone, result.role!, result.pitchName);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.errorMessage ?? 'حدث خطأ غير معروف')));
+        }
+      }
+      return;
+    }
 
     if (phone.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى ملء رقم الهاتف والرمز السري')));
@@ -100,6 +148,41 @@ class _AuthScreenState extends State<AuthScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.errorMessage ?? 'حدث خطأ غير معروف')));
       }
     }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isGoogleLoading = true);
+    final result = await AuthService.signInWithGoogle();
+
+    if (!mounted) return;
+    setState(() => _isGoogleLoading = false);
+
+    if (result.success) {
+      _navigateBasedOnRole(result.phone ?? '', result.role!, result.pitchName);
+    } else if (result.needsProfileCompletion) {
+      setState(() {
+        _needsGoogleCompletion = true;
+        isLogin = false; // نعرض حقول التسجيل (بدون كلمة المرور)
+        _pendingFirebaseUid = result.firebaseUid;
+        if ((result.googleName ?? '').isNotEmpty) nameController.text = result.googleName!;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('أهلاً! أكمل بياناتك لإنشاء حسابك بالتطبيق'), backgroundColor: Color(0xFF1B5E20)),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.errorMessage ?? 'حدث خطأ غير معروف')));
+    }
+  }
+
+  void _cancelGoogleCompletion() {
+    AuthService.signOutAll();
+    setState(() {
+      _needsGoogleCompletion = false;
+      _pendingFirebaseUid = null;
+      isLogin = true;
+      nameController.clear();
+      phoneController.clear();
+    });
   }
 
   @override
@@ -178,6 +261,24 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 20),
                 ],
 
+                if (_needsGoogleCompletion) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF1B5E20), size: 18),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text('تم تسجيل الدخول بحساب Google، أكمل بياناتك للمتابعة', style: TextStyle(fontSize: 11.5, color: Color(0xFF1B5E20), fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
@@ -185,17 +286,19 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                TextField(
-                  controller: passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'الرمز السري (Password)',
-                    prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF1B5E20)),
-                    suffixIcon: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                if (!_needsGoogleCompletion) ...[
+                  TextField(
+                    controller: passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'الرمز السري (Password)',
+                      prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF1B5E20)),
+                      suffixIcon: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
+                  const SizedBox(height: 14),
+                ],
 
                 if (!isLogin) ...[
                   TextField(
@@ -290,14 +393,62 @@ class _AuthScreenState extends State<AuthScreen> {
                     onPressed: isLoading ? null : _submit,
                     child: isLoading
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Text(isLogin ? 'تسجيل الدخول' : 'تأكيد التسجيل', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                        : Text(
+                            _needsGoogleCompletion ? 'إنشاء الحساب' : (isLogin ? 'تسجيل الدخول' : 'تأكيد التسجيل'),
+                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ),
+
+                if (!_needsGoogleCompletion) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('أو', style: TextStyle(color: Colors.grey.shade500, fontSize: 12))),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                      child: _isGoogleLoading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1B5E20)))
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 20,
+                                  height: 20,
+                                  alignment: Alignment.center,
+                                  child: const Text('G', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF4285F4))),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text('المتابعة عبر Google', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF334155))),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 14),
-                TextButton(
-                  onPressed: () => setState(() => isLogin = !isLogin),
-                  child: Text(isLogin ? 'ليس لديك حساب؟ سجل الآن' : 'لديك حساب بالفعل؟ سجل دخولك', style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold)),
-                ),
+                if (_needsGoogleCompletion)
+                  TextButton(
+                    onPressed: _cancelGoogleCompletion,
+                    child: const Text('إلغاء والعودة لتسجيل الدخول', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => setState(() => isLogin = !isLogin),
+                    child: Text(isLogin ? 'ليس لديك حساب؟ سجل الآن' : 'لديك حساب بالفعل؟ سجل دخولك', style: const TextStyle(color: Color(0xFF1B5E20), fontWeight: FontWeight.bold)),
+                  ),
               ],
             ),
           ),

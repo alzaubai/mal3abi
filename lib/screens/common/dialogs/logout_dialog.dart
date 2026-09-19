@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../auth_screen.dart';
+import '../../../services/auth_service.dart';
 
 class LogoutDialog {
   static void show(BuildContext context, {required String userTypeMessage}) {
@@ -32,6 +33,7 @@ class LogoutDialog {
               ),
               onPressed: () async {
                 Navigator.pop(ctx);
+                await AuthService.signOutAll();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.clear();
                 if (context.mounted) {
