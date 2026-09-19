@@ -32,13 +32,15 @@ jobs:
           cache: true
 
       - name: Prepare Permanent Keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           if [ ! -f "keystore.jks" ]; then
             keytool -genkeypair -v \
               -keystore keystore.jks \
-              -storepass "malabi_secure_2026" \
+              -storepass "$KEYSTORE_PASSWORD" \
               -alias "malabi_key" \
-              -keypass "malabi_secure_2026" \
+              -keypass "$KEYSTORE_PASSWORD" \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
@@ -50,6 +52,15 @@ jobs:
             git commit -m "chore: save permanent keystore [skip ci]" || true
             git push origin main || true
           fi
+
+      - name: Print Keystore SHA-1 Fingerprint
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          echo "==================== انسخ سطر SHA1 بالأسفل والصقه بـ Firebase ===================="
+          keytool -list -v -keystore keystore.jks -alias malabi_key -storepass "$KEYSTORE_PASSWORD" | grep -A1 "Certificate fingerprints" 
+          keytool -list -v -keystore keystore.jks -alias malabi_key -storepass "$KEYSTORE_PASSWORD" | grep "SHA1:"
+          echo "======================================================================"
 
       - name: Create Clean Android Platform
         run: |
@@ -75,22 +86,25 @@ jobs:
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle || true
 
       - name: Configure Gradle Signing
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           cat << 'EOF' > configure_signing.py
-          import re
+          import re, os
           path = 'android/app/build.gradle'
           with open(path, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          signing_config = """
-              signingConfigs {
-                  release {
+          keystore_password = os.environ['KEYSTORE_PASSWORD']
+          signing_config = f"""
+              signingConfigs {{
+                  release {{
                       storeFile file("upload-keystore.jks")
-                      storePassword "malabi_secure_2026"
+                      storePassword "{keystore_password}"
                       keyAlias "malabi_key"
-                      keyPassword "malabi_secure_2026"
-                  }
-              }
+                      keyPassword "{keystore_password}"
+                  }}
+              }}
           """
           if 'signingConfigs {' not in content:
               content = content.replace('buildTypes {', signing_config + '\n    buildTypes {')
