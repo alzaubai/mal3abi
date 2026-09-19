@@ -57,7 +57,7 @@ class AuthService {
       case 'weak-password':
         return 'الرمز السري ضعيف، اختر رمزاً أقوى (6 خانات على الأقل)';
       default:
-        return 'حدث خطأ أثناء المصادقة، حاول مجدداً';
+        return 'حدث خطأ أثناء المصادقة (كود: $code)، حاول مجدداً';
     }
   }
 
@@ -109,7 +109,13 @@ class AuthService {
     try {
       final existingDoc = await _firestore.collection('users').doc(phone).get();
       if (existingDoc.exists) {
-        return AuthResult(success: false, errorMessage: 'رقم الهاتف مسجل مسبقاً، يرجى تسجيل الدخول');
+        final existingData = existingDoc.data() as Map<String, dynamic>?;
+        final hasRealAccount = (existingData?['firebaseUid'] ?? '').toString().isNotEmpty;
+        if (hasRealAccount) {
+          return AuthResult(success: false, errorMessage: 'رقم الهاتف مسجل مسبقاً، يرجى تسجيل الدخول');
+        }
+        // حساب قديم من النظام السابق (بدون ربط Firebase حقيقي، غالباً بكلمة مرور نص صريح) —
+        // نسمح بإعادة تسجيله من جديد؛ سيُستبدل بالكامل ببيانات نظيفة عند نجاح التسجيل أدناه
       }
 
       if (isOwner && (pitchName == null || pitchName.isEmpty)) {
@@ -254,7 +260,11 @@ class AuthService {
     try {
       final existingDoc = await _firestore.collection('users').doc(phone).get();
       if (existingDoc.exists) {
-        return AuthResult(success: false, errorMessage: 'رقم الهاتف مسجل مسبقاً بحساب آخر، يرجى تسجيل الدخول بالطريقة الأصلية');
+        final existingData = existingDoc.data() as Map<String, dynamic>?;
+        final hasRealAccount = (existingData?['firebaseUid'] ?? '').toString().isNotEmpty;
+        if (hasRealAccount) {
+          return AuthResult(success: false, errorMessage: 'رقم الهاتف مسجل مسبقاً بحساب آخر، يرجى تسجيل الدخول بالطريقة الأصلية');
+        }
       }
 
       if (isOwner && (pitchName == null || pitchName.isEmpty)) {

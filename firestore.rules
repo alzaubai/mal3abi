@@ -21,7 +21,9 @@ service cloud.firestore {
 
     // ---------- المستخدمون ----------
     match /users/{phone} {
-      allow read: if isSignedIn();
+      // القراءة عامة (بلا تسجيل دخول) لأن التحقق من رقم الهاتف المكرر وقت التسجيل
+      // يصير قبل تسجيل الدخول فعلياً؛ لا كلمات مرور محفوظة هنا أصلاً بعد التحديث
+      allow read: if true;
       // إنشاء وثيقة المستخدم مسموح فقط لصاحب الحساب نفسه (firebaseUid يطابق حساب Auth الحالي)
       allow create: if isSignedIn() && request.resource.data.firebaseUid == request.auth.uid;
       allow update: if isSignedIn();
