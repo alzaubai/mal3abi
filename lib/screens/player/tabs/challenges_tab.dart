@@ -28,6 +28,55 @@ class _ChallengesTabState extends State<ChallengesTab> {
     );
   }
 
+  void _openGovernorateFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: ui.TextDirection.rtl,
+        child: Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('اختر المحافظة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: iraqGovernoratesList.length,
+                  itemBuilder: (context, index) {
+                    final gov = iraqGovernoratesList[index];
+                    final isSelected = gov == _selectedGov;
+                    return ListTile(
+                      title: Text(gov, style: TextStyle(fontSize: 14, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? const Color(0xFF1B5E20) : Colors.black87)),
+                      trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: Color(0xFF1B5E20)) : null,
+                      onTap: () {
+                        setState(() => _selectedGov = gov);
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _confirmCancel(String challengeId, String teamName) {
     showDialog(
       context: context,
@@ -138,20 +187,29 @@ class _ChallengesTabState extends State<ChallengesTab> {
             Container(
               padding: const EdgeInsets.all(14),
               color: Colors.white,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    const Icon(Icons.filter_alt_rounded, size: 18, color: Color(0xFF1B5E20)),
-                    const SizedBox(width: 6),
-                    DropdownButton<String>(
-                      value: _selectedGov,
-                      underline: const SizedBox(),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
-                      items: iraqGovernoratesList.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                      onChanged: (v) => setState(() => _selectedGov = v!),
-                    ),
-                  ],
+              child: InkWell(
+                onTap: _openGovernorateFilterSheet,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.filter_alt_rounded, size: 18, color: Color(0xFF1B5E20)),
+                      const SizedBox(width: 8),
+                      Text(
+                        'المحافظة: $_selectedGov',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF1B5E20)),
+                    ],
+                  ),
                 ),
               ),
             ),

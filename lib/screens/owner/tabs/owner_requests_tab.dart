@@ -23,10 +23,7 @@ class _OwnerRequestsTabState extends State<OwnerRequestsTab> {
 
     try {
       final data = doc.data() as Map<String, dynamic>;
-      final userPhone = data['phone']?.toString() ?? '';
       final teamOne = data['teamOne']?.toString() ?? 'فريق كابتن';
-      final date = data['date']?.toString() ?? '';
-      final startTime = data['startTime']?.toString() ?? '';
 
       final batch = FirebaseFirestore.instance.batch();
 
@@ -35,19 +32,6 @@ class _OwnerRequestsTabState extends State<OwnerRequestsTab> {
         'seenByPlayer': false,
         'approvedAt': FieldValue.serverTimestamp(),
       });
-
-      if (userPhone.isNotEmpty) {
-        final notifRef = FirebaseFirestore.instance.collection('notifications').doc();
-        batch.set(notifRef, {
-          'userPhone': userPhone,
-          'type': 'booking_approved',
-          'title': 'تم تأكيد حجزك رسمياً! ⚽',
-          'body': 'تمت الموافقة على حجز فريق ($teamOne) بتاريخ $date الساعة $startTime',
-          'bookingId': docId,
-          'seen': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
 
       await batch.commit();
 
@@ -138,10 +122,6 @@ class _OwnerRequestsTabState extends State<OwnerRequestsTab> {
                     setState(() => _processingDocs.add(docId));
 
                     try {
-                      final userPhone = data['phone']?.toString() ?? '';
-                      final date = data['date']?.toString() ?? '';
-                      final startTime = data['startTime']?.toString() ?? '';
-
                       final batch = FirebaseFirestore.instance.batch();
 
                       batch.update(doc.reference, {
@@ -150,19 +130,6 @@ class _OwnerRequestsTabState extends State<OwnerRequestsTab> {
                         'seenByPlayer': false,
                         'rejectedAt': FieldValue.serverTimestamp(),
                       });
-
-                      if (userPhone.isNotEmpty) {
-                        final notifRef = FirebaseFirestore.instance.collection('notifications').doc();
-                        batch.set(notifRef, {
-                          'userPhone': userPhone,
-                          'type': 'booking_rejected',
-                          'title': 'تم الاعتذار عن موعد الحجز',
-                          'body': 'نعتذر عن حجز موعد $date ($startTime). السبب: $finalReason',
-                          'bookingId': docId,
-                          'seen': false,
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                      }
 
                       await batch.commit();
                     } catch (_) {} finally {

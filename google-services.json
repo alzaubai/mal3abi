@@ -12,7 +12,20 @@
           "package_name": "com.example.football"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "152654631502-g13vpfruqqaa98vd4qhe4opn6kknql7i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.football",
+            "certificate_hash": "13cd31a8a9038eff579d0773aa246eff48427efd"
+          }
+        },
+        {
+          "client_id": "152654631502-b63giseavogid0ur3q2ooloem3t2vbtl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBPrXRHlL1XlJLe2H0z_E2SLo8PO0C4Eyw"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "152654631502-b63giseavogid0ur3q2ooloem3t2vbtl.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
